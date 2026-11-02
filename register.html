@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สมัครสมาชิก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#f4f7f6; --card:#fff; --text:#1d2a27; --muted:#64736f;
+    --line:#d7e0dd; --primary:#0f8a6b; --primary-dark:#0b6b53;
+    --danger:#c0392b; --danger-bg:#fdecea; --ok-bg:#e7f6f1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:'Sarabun',system-ui,sans-serif;font-size:17px;line-height:1.5}
+  .wrap{max-width:520px;margin:0 auto;padding:20px 16px 40px}
+  header{text-align:center;margin-bottom:16px}
+  header h1{margin:0;font-size:26px;color:var(--primary-dark)}
+  header p{margin:4px 0 0;color:var(--muted);font-size:15px}
+  .card{background:var(--card);border-radius:14px;padding:20px 18px;
+        box-shadow:0 2px 10px rgba(0,0,0,.06)}
+  label.f{display:block;font-weight:600;margin:14px 0 6px}
+  label.f small{font-weight:400;color:var(--muted)}
+  input[type=text],input[type=tel],input[type=email],select{
+    width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
+    font:inherit;background:#fff;color:var(--text)}
+  input:focus,select:focus{outline:2px solid var(--primary);border-color:transparent}
+  .row{display:flex;gap:8px}
+  .row > *{flex:1}
+  .gender{display:flex;gap:8px}
+  .gender label{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px;
+                text-align:center;cursor:pointer;user-select:none}
+  .gender input{display:none}
+  .gender input:checked + span{color:#fff}
+  .gender label:has(input:checked){background:var(--primary);border-color:var(--primary);color:#fff}
+  .hint{font-size:14px;color:var(--muted);margin-top:4px}
+  .consent{display:flex;gap:10px;align-items:flex-start;margin-top:16px;
+           padding:12px;border:1px solid var(--line);border-radius:10px;font-size:15px}
+  .consent input{width:22px;height:22px;margin-top:2px;flex:none;accent-color:var(--primary)}
+  button{width:100%;margin-top:20px;padding:14px;border:0;border-radius:10px;
+         background:var(--primary);color:#fff;font:inherit;font-weight:700;font-size:18px;cursor:pointer}
+  button:disabled{background:#a9bdb7;cursor:not-allowed}
+  .msg{margin-top:14px;padding:12px;border-radius:10px;display:none}
+  .msg.err{display:block;background:var(--danger-bg);color:var(--danger)}
+  .done{text-align:center;display:none}
+  .done .no{font-size:40px;font-weight:700;color:var(--primary-dark);letter-spacing:2px;
+            background:var(--ok-bg);border-radius:12px;padding:14px;margin:14px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>สมัครสมาชิก</h1>
+    <p>บจก.ยาร้อยสองทับสอง</p>
+  </header>
+
+  <div class="card" id="formCard">
+    <form id="f" novalidate>
+      <label class="f" for="first">ชื่อ</label>
+      <input type="text" id="first" maxlength="100" autocomplete="given-name" required>
+
+      <label class="f" for="last">นามสกุล</label>
+      <input type="text" id="last" maxlength="100" autocomplete="family-name" required>
+
+      <label class="f">เพศ</label>
+      <div class="gender">
+        <label><input type="radio" name="gender" value="ชาย"><span>ชาย</span></label>
+        <label><input type="radio" name="gender" value="หญิง"><span>หญิง</span></label>
+        <label><input type="radio" name="gender" value="ไม่ระบุ"><span>ไม่ระบุ</span></label>
+      </div>
+
+      <label class="f" for="phone">เบอร์โทร</label>
+      <input type="tel" id="phone" inputmode="numeric" maxlength="10" placeholder="0812345678" autocomplete="tel">
+      <div class="hint">ตัวเลข 10 หลัก ไม่ต้องเว้นวรรค ไม่ต้องใส่ -</div>
+
+      <label class="f">วันเดือนปีเกิด <small>(ปี พ.ศ.)</small></label>
+      <div class="row">
+        <select id="bd"><option value="">วัน</option></select>
+        <select id="bm"><option value="">เดือน</option></select>
+        <select id="by"><option value="">ปี พ.ศ.</option></select>
+      </div>
+
+      <label class="f" for="email">Email <small>(ไม่บังคับ)</small></label>
+      <input type="email" id="email" maxlength="200" autocomplete="email">
+
+      <label class="consent">
+        <input type="checkbox" id="ack">
+        <span>หากข้อมูลข้างต้นไม่ตรงกับบัตรประชาชน ข้าพเจ้าจะไม่สามารถใช้สิทธิพิเศษของทางบริษัทได้ — <b>รับทราบ</b></span>
+      </label>
+
+      <label class="consent">
+        <input type="checkbox" id="pdpa">
+        <span>ข้าพเจ้าได้รับทราบและให้ความยินยอมในการที่ บจก.ยาร้อยสองทับสอง จะเก็บรวบรวมข้อมูลส่วนบุคคลของข้าพเจ้า (เช่น ชื่อ, อีเมล, เบอร์โทร ฯลฯ) เพื่อเป็นวิเคราะห์และเก็บข้อมูลการใช้ผลิตภัณฑ์ และข้าพเจ้าเข้าใจถึงสิทธิของข้าพเจ้าตามกฎหมาย PDPA — <b>ยอมรับ</b></span>
+      </label>
+
+      <button type="submit" id="btn" disabled>สมัครสมาชิก</button>
+      <div class="msg" id="msg"></div>
+    </form>
+  </div>
+
+  <div class="card done" id="doneCard">
+    <h2 style="margin:0">สมัครสำเร็จ 🎉</h2>
+    <p>เลขสมาชิกของคุณคือ</p>
+    <div class="no" id="memberNo"></div>
+    <p class="hint">กรุณาแคปหน้าจอนี้ไว้ แล้วแจ้งพนักงานที่เคาน์เตอร์</p>
+  </div>
+</div>
+
+<script>
+// ====== ตั้งค่า: ใช้ค่าเดียวกับระบบแจ้งการทำงาน ======
+const SUPABASE_URL = 'https://mcworachai-code.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_DqAsUVpzh9STM9-AMYyUxw_5nOTIkft';
+// ===================================================
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
+
+const $ = id => document.getElementById(id);
+const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+// เติมตัวเลือกวัน/เดือน/ปี พ.ศ.
+(function fillDate(){
+  for (let d = 1; d <= 31; d++) $('bd').add(new Option(d, d));
+  MONTHS.forEach((m, i) => $('bm').add(new Option(m, i + 1)));
+  const nowBE = new Date().getFullYear() + 543;
+  for (let y = nowBE; y >= nowBE - 110; y--) $('by').add(new Option(y, y));
+})();
+
+function toISO(d, m, yBE){
+  if (!d || !m || !yBE) return null;
+  const y = yBE - 543;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCMonth() !== m - 1) return null;            // เช่น 31 ก.พ.
+  if (dt > new Date()) return null;
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+// เบอร์โทร: เหลือแต่ตัวเลข
+$('phone').addEventListener('input', e => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+});
+
+// ปุ่มกดได้เมื่อติ๊กครบ 2 ช่อง
+function syncBtn(){ $('btn').disabled = !($('ack').checked && $('pdpa').checked); }
+$('ack').addEventListener('change', syncBtn);
+$('pdpa').addEventListener('change', syncBtn);
+
+function showErr(t){ const m = $('msg'); m.textContent = t; m.className = 'msg err'; }
+function clearErr(){ $('msg').className = 'msg'; }
+
+const ERR = {
+  CONSENT_REQUIRED: 'กรุณาติ๊กรับทราบและยินยอมให้ครบทั้ง 2 ช่อง',
+  INVALID_NAME: 'กรุณากรอกชื่อและนามสกุล',
+  INVALID_GENDER: 'กรุณาเลือกเพศ',
+  INVALID_PHONE: 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0',
+  INVALID_BIRTHDATE: 'วันเดือนปีเกิดไม่ถูกต้อง',
+  INVALID_EMAIL: 'รูปแบบ Email ไม่ถูกต้อง',
+  DUPLICATE_PHONE: 'เบอร์โทรนี้เป็นสมาชิกอยู่แล้ว กรุณาติดต่อพนักงาน'
+};
+
+$('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  clearErr();
+
+  const first = $('first').value.trim();
+  const last  = $('last').value.trim();
+  const g     = document.querySelector('input[name=gender]:checked');
+  const phone = $('phone').value.trim();
+  const bd    = toISO(+$('bd').value, +$('bm').value, +$('by').value);
+  const email = $('email').value.trim();
+
+  if (!first || !last) return showErr(ERR.INVALID_NAME);
+  if (!g) return showErr(ERR.INVALID_GENDER);
+  if (!/^0\d{9}$/.test(phone)) return showErr(ERR.INVALID_PHONE);
+  if (!bd) return showErr(ERR.INVALID_BIRTHDATE);
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return showErr(ERR.INVALID_EMAIL);
+  if (!$('ack').checked || !$('pdpa').checked) return showErr(ERR.CONSENT_REQUIRED);
+
+  const btn = $('btn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+
+  try {
+    const { data, error } = await sb.rpc('member_register', {
+      p_first_name: first, p_last_name: last, p_gender: g.value,
+      p_phone: phone, p_birth_date: bd, p_email: email || null,
+      p_ack: true, p_consent: true
+    });
+    if (error) throw error;
+    if (!data || !data.ok) {
+      showErr(ERR[data && data.error] || 'บันทึกไม่สำเร็จ กรุณาลองใหม่');
+    } else {
+      $('memberNo').textContent = data.member_no;
+      $('formCard').style.display = 'none';
+      $('doneCard').style.display = 'block';
+      window.scrollTo(0, 0);
+      return;
+    }
+  } catch (err) {
+    console.error(err);
+    showErr('เชื่อมต่อระบบไม่ได้ กรุณาลองใหม่ หรือติดต่อพนักงาน');
+  }
+  btn.textContent = 'สมัครสมาชิก';
+  syncBtn();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รายชื่อสมาชิก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#f4f7f6; --card:#fff; --text:#1d2a27; --muted:#64736f; --line:#d7e0dd;
+    --primary:#0f8a6b; --primary-dark:#0b6b53; --danger:#c0392b; --danger-bg:#fdecea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:'Sarabun',system-ui,sans-serif;font-size:16px;line-height:1.45}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  h1{margin:0;font-size:24px;color:var(--primary-dark)}
+  .who{font-size:14px;color:var(--muted)}
+  .card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-top:14px}
+  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--text)}
+  textarea{resize:vertical;min-height:60px}
+  button{padding:9px 14px;border:0;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;
+         background:var(--primary);color:#fff}
+  button.ghost{background:#e8eeec;color:var(--text)}
+  button.danger{background:var(--danger)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .bar input{flex:1;min-width:200px}
+  .count{color:var(--muted);font-size:14px}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#eef3f1;font-weight:600;white-space:nowrap}
+  tr:hover td{background:#f8fbfa}
+  .tag{font-size:12px;padding:2px 7px;border-radius:20px;background:#e8eeec;color:var(--muted)}
+  .pager{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+  .msg{padding:10px;border-radius:8px;background:var(--danger-bg);color:var(--danger);margin-top:10px;display:none}
+  #loginCard{max-width:380px;margin:60px auto}
+  #loginCard label{display:block;font-weight:600;margin:12px 0 4px}
+  #loginCard button{width:100%;margin-top:16px}
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 16px}
+  .modal.show{display:flex}
+  .modal .box{background:#fff;border-radius:12px;padding:18px;width:100%;max-width:520px}
+  .modal label{display:block;font-weight:600;margin:10px 0 4px}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .actions{display:flex;gap:8px;justify-content:space-between;margin-top:16px;flex-wrap:wrap}
+  /* มือถือ: ตารางเป็นการ์ด */
+  @media (max-width:720px){
+    thead{display:none}
+    table,tbody,tr,td{display:block;width:100%}
+    tr{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;padding:6px 4px;background:#fff}
+    td{border:0;padding:4px 8px}
+    td::before{content:attr(data-l);display:inline-block;min-width:90px;color:var(--muted);font-size:13px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Login -->
+  <div class="card" id="loginCard" style="display:none">
+    <h1>เข้าสู่ระบบ</h1>
+    <label for="lu">ชื่อผู้ใช้</label>
+    <input id="lu" type="text" autocomplete="username" placeholder="เช่น c1">
+    <label for="lp">รหัสผ่าน</label>
+    <input id="lp" type="password" autocomplete="current-password">
+    <button id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="msg" id="loginMsg"></div>
+  </div>
+
+  <!-- No access -->
+  <div class="card" id="denyCard" style="display:none;max-width:420px;margin:60px auto;text-align:center">
+    <h2 style="margin-top:0">ไม่มีสิทธิ์เข้าดูข้อมูลสมาชิก</h2>
+    <p class="who" id="denyWho"></p>
+    <button class="ghost" onclick="logout()">ออกจากระบบ</button>
+  </div>
+
+  <!-- Main -->
+  <div id="main" style="display:none">
+    <div class="top">
+      <h1>รายชื่อสมาชิก</h1>
+      <div class="bar">
+        <span class="who" id="who"></span>
+        <button class="ghost" onclick="logout()">ออกจากระบบ</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="bar">
+        <input id="q" type="search" placeholder="ค้นหา: เลขสมาชิก / ชื่อ / นามสกุล / เบอร์โทร / รหัส CW">
+        <span class="count" id="count"></span>
+      </div>
+      <div class="msg" id="listMsg"></div>
+      <div style="overflow-x:auto;margin-top:12px">
+        <table>
+          <thead><tr>
+            <th>เลขสมาชิก</th><th>ชื่อ-สกุล</th><th>เพศ</th><th>เบอร์โทร</th>
+            <th>วันเกิด</th><th>Email</th><th>รหัส CW</th><th>ที่มา</th><th>สมัครเมื่อ</th><th class="adm"></th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button class="ghost" id="prev">‹ ก่อนหน้า</button>
+        <span class="count" id="pageInfo"></span>
+        <button class="ghost" id="next">ถัดไป ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal (admin) -->
+<div class="modal" id="modal">
+  <div class="box">
+    <h2 style="margin:0" id="mTitle">แก้ไขสมาชิก</h2>
+    <label>ชื่อ</label><input id="eFirst" maxlength="100">
+    <label>นามสกุล</label><input id="eLast" maxlength="100">
+    <label>เพศ</label>
+    <select id="eGender"><option value="">-</option><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select>
+    <label>เบอร์โทร</label><input id="ePhone" inputmode="numeric" maxlength="10">
+    <label>วันเกิด (ปี พ.ศ.)</label>
+    <div class="row">
+      <select id="eBd"><option value="">วัน</option></select>
+      <select id="eBm"><option value="">เดือน</option></select>
+      <select id="eBy"><option value="">ปี</option></select>
+    </div>
+    <label>Email</label><input id="eEmail" type="email" maxlength="200">
+    <label>รหัส CW</label><input id="eCw" maxlength="50">
+    <label>หมายเหตุ</label><textarea id="eNote"></textarea>
+    <div class="msg" id="mMsg"></div>
+    <div class="actions">
+      <button class="danger" id="delBtn">ลบสมาชิก</button>
+      <span>
+        <button class="ghost" onclick="closeModal()">ยกเลิก</button>
+        <button id="saveBtn">บันทึก</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== ตั้งค่า: ใช้ค่าเดียวกับระบบแจ้งการทำงาน ======
+const SUPABASE_URL = 'https://mcworachai-code.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_DqAsUVpzh9STM9-AMYyUxw_5nOTIkft';
+// ===================================================
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const PAGE = 50;
+const MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const SRC = { self: 'สมัครเอง', pos: 'POS', ggs: 'GGS' };
+let role = null, page = 0, total = 0, cache = [], editing = null;
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
+const msg = (id, t) => { const m = $(id); m.textContent = t || ''; m.style.display = t ? 'block' : 'none'; };
+
+function fmtDate(iso){
+  if (!iso) return '-';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]} ${y + 543}`;
+}
+
+// ---------- Auth ----------
+async function init(){
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { show('loginCard', true); return; }
+  const { data: r, error } = await sb.rpc('member_role');
+  if (error) console.error(error);
+  role = r;
+  if (!role) { $('denyWho').textContent = session.user.email; show('denyCard', true); return; }
+  $('who').textContent = `${session.user.email} (${role === 'admin' ? 'Admin' : 'ดูอย่างเดียว'})`;
+  document.querySelectorAll('.adm').forEach(el => el.style.display = role === 'admin' ? '' : 'none');
+  show('main', true);
+  load();
+}
+
+$('loginBtn').onclick = async () => {
+  msg('loginMsg', '');
+     let u = $('lu').value.trim().toLowerCase();
+     if (/^c\d+$/.test(u)) u = `ya+${u}@gmail.com`;
+     const { error } = await sb.auth.signInWithPassword({ email: u, password: $('lp').value });
+  if (error) return msg('loginMsg', 'Email หรือรหัสผ่านไม่ถูกต้อง');
+  show('loginCard', false);
+  init();
+};
+$('lp').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+
+async function logout(){ await sb.auth.signOut(); location.reload(); }
+
+// ---------- List ----------
+async function load(){
+  msg('listMsg', '');
+  let q = sb.from('members').select('*', { count: 'exact' })
+            .order('id', { ascending: false })
+            .range(page * PAGE, page * PAGE + PAGE - 1);
+
+  // แยกคำด้วยช่องว่าง ทุกคำต้องเจอ (เช่น "สมชาย ใจดี")
+  const terms = $('q').value.replace(/[,()*%\\:"]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  for (const t of terms) {
+    q = q.or(['member_no','first_name','last_name','phone','cw_code','email']
+              .map(c => `${c}.ilike.*${t}*`).join(','));
+  }
+
+  const { data, error, count } = await q;
+  if (error) { console.error(error); return msg('listMsg', 'โหลดข้อมูลไม่สำเร็จ: ' + error.message); }
+  cache = data; total = count || 0;
+  render();
+}
+
+function render(){
+  const admin = role === 'admin';
+  $('rows').innerHTML = cache.length ? cache.map((m, i) => `
+    <tr>
+      <td data-l="เลขสมาชิก"><b>${esc(m.member_no)}</b></td>
+      <td data-l="ชื่อ-สกุล">${esc(m.first_name)} ${esc(m.last_name)}</td>
+      <td data-l="เพศ">${esc(m.gender || '-')}</td>
+      <td data-l="เบอร์โทร">${esc(m.phone || '-')}</td>
+      <td data-l="วันเกิด">${fmtDate(m.birth_date)}</td>
+      <td data-l="Email">${esc(m.email || '-')}</td>
+      <td data-l="รหัส CW">${esc(m.cw_code || '-')}</td>
+      <td data-l="ที่มา"><span class="tag">${SRC[m.source] || esc(m.source)}</span></td>
+      <td data-l="สมัครเมื่อ">${fmtDate(m.created_at)}</td>
+      ${admin ? `<td><button class="ghost" onclick="openEdit(${i})">แก้ไข</button></td>` : ''}
+    </tr>`).join('')
+    : `<tr><td colspan="10" style="text-align:center;color:var(--muted)">ไม่พบข้อมูล</td></tr>`;
+
+  const pages = Math.max(1, Math.ceil(total / PAGE));
+  $('count').textContent = `ทั้งหมด ${total.toLocaleString()} คน`;
+  $('pageInfo').textContent = `หน้า ${page + 1} / ${pages}`;
+  $('prev').disabled = page === 0;
+  $('next').disabled = page + 1 >= pages;
+}
+
+let timer;
+$('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 350); });
+$('prev').onclick = () => { if (page > 0) { page--; load(); } };
+$('next').onclick = () => { page++; load(); };
+
+// ---------- Edit (admin) ----------
+(function fillDate(){
+  for (let d = 1; d <= 31; d++) $('eBd').add(new Option(d, d));
+  MONTHS.forEach((m, i) => $('eBm').add(new Option(m, i + 1)));
+  const nowBE = new Date().getFullYear() + 543;
+  for (let y = nowBE; y >= nowBE - 110; y--) $('eBy').add(new Option(y, y));
+})();
+$('ePhone').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); });
+
+function openEdit(i){
+  const m = cache[i]; editing = m;
+  $('mTitle').textContent = `แก้ไขสมาชิก ${m.member_no}`;
+  $('eFirst').value = m.first_name || '';
+  $('eLast').value = m.last_name || '';
+  $('eGender').value = m.gender || '';
+  $('ePhone').value = m.phone || '';
+  if (m.birth_date) {
+    const [y, mo, d] = m.birth_date.split('-').map(Number);
+    $('eBd').value = d; $('eBm').value = mo; $('eBy').value = y + 543;
+  } else { $('eBd').value = $('eBm').value = $('eBy').value = ''; }
+  $('eEmail').value = m.email || '';
+  $('eCw').value = m.cw_code || '';
+  $('eNote').value = m.note || '';
+  msg('mMsg', '');
+  $('modal').classList.add('show');
+}
+function closeModal(){ $('modal').classList.remove('show'); editing = null; }
+
+$('saveBtn').onclick = async () => {
+  msg('mMsg', '');
+  const phone = $('ePhone').value.trim();
+  if (!$('eFirst').value.trim()) return msg('mMsg', 'กรุณากรอกชื่อ');
+  if (phone && !/^0\d{9}$/.test(phone)) return msg('mMsg', 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0');
+
+  let bd = null;
+  const d = +$('eBd').value, mo = +$('eBm').value, yb = +$('eBy').value;
+  if (d || mo || yb) {
+    if (!(d && mo && yb)) return msg('mMsg', 'กรอกวันเกิดให้ครบ หรือเว้นว่างทั้ง 3 ช่อง');
+    const y = yb - 543, dt = new Date(Date.UTC(y, mo - 1, d));
+    if (dt.getUTCMonth() !== mo - 1) return msg('mMsg', 'วันเกิดไม่ถูกต้อง');
+    bd = `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
+
+  $('saveBtn').disabled = true;
+  const { error } = await sb.from('members').update({
+    first_name: $('eFirst').value.trim(),
+    last_name: $('eLast').value.trim() || null,
+    gender: $('eGender').value || null,
+    phone: phone || null,
+    birth_date: bd,
+    email: $('eEmail').value.trim().toLowerCase() || null,
+    cw_code: $('eCw').value.trim() || null,
+    note: $('eNote').value.trim() || null
+  }).eq('id', editing.id);
+  $('saveBtn').disabled = false;
+
+  if (error) {
+    console.error(error);
+    return msg('mMsg', error.code === '23505' ? 'เบอร์โทรนี้มีสมาชิกคนอื่นใช้อยู่แล้ว' : 'บันทึกไม่สำเร็จ: ' + error.message);
+  }
+  closeModal(); load();
+};
+
+$('delBtn').onclick = async () => {
+  const m = editing;
+  const typed = prompt(`ยืนยันลบสมาชิก ${m.first_name} ${m.last_name || ''}\nพิมพ์เลขสมาชิก ${m.member_no} เพื่อยืนยัน`);
+  if (typed === null) return;
+  if (typed.trim().toUpperCase() !== m.member_no) return msg('mMsg', 'เลขสมาชิกไม่ตรง ยกเลิกการลบ');
+  const { error } = await sb.from('members').delete().eq('id', m.id);
+  if (error) { console.error(error); return msg('mMsg', 'ลบไม่สำเร็จ: ' + error.message); }
+  closeModal(); load();
+};
+
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+init();
+</script>
+</body>
+</html>
