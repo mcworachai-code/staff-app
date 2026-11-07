@@ -233,6 +233,7 @@
   @media(min-width:900px){.perf{bottom:8px}}
   .login input.em{font-size:16px;letter-spacing:0}
 </style>
+<link rel="stylesheet" href="buttons.css">
 </head>
 <body>
 
@@ -468,6 +469,7 @@ async function start(){
 async function loadData(ym){
   const d = await api('getAppData', ym);
   if(!d || !d.me) throw new Error('โหลดข้อมูลไม่สำเร็จ ลองกดรีเฟรช');
+  try{ applyBranding(d); }catch(e){}
   return d;
 }
 async function reload(){
@@ -482,7 +484,7 @@ function tabList(){
   if(isPC()) return [['cal','ปฏิทินของฉัน','calendar'],['mine','คำขอของฉัน','file-text']];
   if(!isMgr()) return [['cal','ปฏิทิน','calendar'],['mine','คำขอของฉัน','file-text'],['stat','สถิติลา','chart-pie'],['close','ปิดเดือน','circle-check']];
   const t=[['pending','รออนุมัติ','inbox'],['cal','ตาราง','calendar'],['summary','สรุป','chart-bar'],['emps','พนักงาน','users']];
-  if(D.me.role==='Admin') t.push(['audit','ประวัติ','history'],['settings','ตั้งค่า','settings']);
+  if(D.me.role==='Admin') t.push(['audit','ประวัติ','history'],['settings','ตั้งค่า','settings'],['orgset','ตั้งค่าร้าน','building-store']);
   return t;
 }
 function renderTabs(){
@@ -494,7 +496,7 @@ function go(v){ if((VIEW==='work'||VIEW==='pay') && v!=='work' && v!=='pay'){ WK
 function render(){
   $('selbar').hidden = true;
   return ({cal:viewCal, mine:viewMine, close:viewClose, pending:viewPending, summary:viewSummary, emps:viewEmps, audit:viewAudit,
-    settings:viewSettings, avail:viewAvail, ptb:viewPtBoard, stat:viewStats, book:viewBook, work:viewWork, pay:viewPay}[VIEW] || viewCal)();
+    settings:viewSettings, orgset:viewOrgSettings, avail:viewAvail, ptb:viewPtBoard, stat:viewStats, book:viewBook, work:viewWork, pay:viewPay}[VIEW] || viewCal)();
 }
 
 /* ---------------- calendar ---------------- */
@@ -784,7 +786,7 @@ function viewAvail(){
   const days=monthDays(D.ym), av=D.avail||[], byD={};
   av.forEach(a=>byD[a.date]=a);
   let h=pinBanner()+`<div class="row"><h2 class="t sp">${ico('calendar-plus')} ลงวันที่สะดวกทำงาน</h2><button class="btn btn-sm" onclick="openMySlip()">${ico('cash')} สลิปเงินเดือน</button></div>
-    <p class="muted" style="font-size:13px;margin-top:-4px">แตะวันที่สะดวก (เลือกได้หลายวัน) แล้วกด "ส่งวันว่าง" · เวลาทำงาน YA 09:00–20:00 / HE 10:00–21:00</p>`;
+    <p class="muted" style="font-size:13px;margin-top:-4px">แตะวันที่สะดวก (เลือกได้หลายวัน) แล้วกด "ส่งวันว่าง" · เวลาทำงาน ${(D.branches||[]).map(b=>b.code+' '+b.ptStart+'–'+b.ptEnd).join(' / ')}</p>`;
   h+=`<div class="calwrap"><div class="mnav"><button class="btn" onclick="moveMonth(-1)">${ico('chevron-left')}</button><h3>${thMonth(D.ym)}</h3><button class="btn" onclick="moveMonth(1)">${ico('chevron-right')}</button></div>`;
   h+=`<div class="cal">${WD.map(w=>`<div class="wd">${w}</div>`).join('')}`;
   for(let i=0;i<dow(days[0]);i++) h+='<div class="day blank"></div>';
@@ -813,7 +815,7 @@ function openAvailForm(){
     <div class="datelist">${dates.map(d=>`<span class="tag">${DAY_TH[dow(d)].slice(0,2)} ${th(d)}</span>`).join('')}</div>
     <label class="l">สาขาที่สะดวก</label>
     <div class="filt"><label class="fchk"><input type="checkbox" id="avYA" checked><span class="br br-YA">YA</span></label><label class="fchk"><input type="checkbox" id="avHE" checked><span class="br br-HE">HE</span></label></div>
-    <div class="muted" style="font-size:13px">${ico('clock')} เวลาทำงาน YA 09:00–20:00 / HE 10:00–21:00 · HR จะเลือกวันที่ต้องการแล้วแจ้งยืนยันทางอีเมล</div>
+    <div class="muted" style="font-size:13px">${ico('clock')} เวลาทำงาน ${(D.branches||[]).map(b=>b.code+' '+b.ptStart+'–'+b.ptEnd).join(' / ')} · HR จะเลือกวันที่ต้องการแล้วแจ้งยืนยันทางอีเมล</div>
     <div class="actions"><button class="btn btn-ghost" onclick="closeDlg()">ยกเลิก</button><button class="btn btn-p" id="avBtn">${ico('send')} ส่งให้ HR</button></div>`);
   $('avBtn').onclick=async()=>{
     const br=[$('avYA').checked?'YA':'', $('avHE').checked?'HE':''].filter(Boolean);
@@ -1687,5 +1689,6 @@ sb.auth.getSession().then(({ data:{ session } })=>{
   if(session.user && session.user.user_metadata && session.user.user_metadata.must_change) openChangePin(true); else start();
 });
 </script>
+<script src="org_settings.js"></script>
 </body>
 </html>
