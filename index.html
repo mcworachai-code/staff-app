@@ -1456,10 +1456,11 @@ async function acceptMonth(){
 /* ---------------- manager: pending ---------------- */
 async function viewPending(){
   $('main').innerHTML='<div class="loading">กำลังโหลด...</div>';
-  let list, sws; try{ [list, sws]=await Promise.all([api('getPending'), api('getSwapsHr')]); }catch(e){ return toast(e.message); }
-  const trPend=(D.timeReqs||[]).filter(r=>r.status==='รออนุมัติ');
+  let list, sws, trs; try{ [list, sws, trs]=await Promise.all([api('getPending'), api('getSwapsHr'), api('getTimeReqs', YM)]); }catch(e){ return toast(e.message); }
+  D.timeReqs=trs;                                    // ดึงสดแล้วเก็บไว้ให้หน้าอื่นใช้ต่อ
+  const trPend=trs.filter(r=>r.status==='รออนุมัติ');
   D.pendingCount=list.length+sws.length+trPend.length; renderTabs();
-  $('main').innerHTML=pinBanner()+`<h2 class="t">${ico('inbox')} รออนุมัติ (${list.length+sws.length})</h2>` + swapHrHtml(sws) + (list.length ? list.map(r=>`
+  $('main').innerHTML=pinBanner()+`<h2 class="t">${ico('inbox')} รออนุมัติ (${list.length+sws.length+trPend.length})</h2>` + swapHrHtml(sws) + (list.length ? list.map(r=>`
     <div class="card">
       <div class="row"><div class="ava">${esc(r.abbr)}</div><b style="font-size:16px">${esc(r.nickname)}</b>
         ${r.kind==='cancel'?'<span class="st st-ขอยกเลิก">ขอยกเลิก</span>':''}${r.special?`<span class="special">${ico('star')} ขออนุมัติพิเศษ</span>`:''}
@@ -1519,7 +1520,10 @@ async function cancelTr(id){
 }
 let TR_TYPE='เลื่อนเวลาเข้า';
 async function viewTimeReqs(){
-  const mgr=isMgr(), lim=D.trLimits||{}, trs=D.timeReqs||[];
+  const mgr=isMgr(), lim=D.trLimits||{};
+  $('main').innerHTML='<div class="loading">กำลังโหลด...</div>';
+  let trs; try{ trs=await api('getTimeReqs', YM); }catch(e){ return toast(e.message); }
+  D.timeReqs=trs;
   const mine=mgr?trs:trs.filter(r=>r.empId===D.me.empId);
   const limLate=lim.late||0, limOut=lim.out||0, usedLate=lim.usedLate||0, usedOut=lim.usedOut||0;
   let h=`<h2 class="t">${ico('clock-edit')} ขอเลื่อนเวลา</h2>`;
