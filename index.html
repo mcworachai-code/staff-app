@@ -249,7 +249,7 @@
     <button class="btn btn-p" style="width:100%;margin-top:18px;padding:13px" id="lgBtn" type="submit"><i class="ti ti-login-2"></i> เข้าสู่ระบบ</button>
     <div class="err" id="lgErr"></div>
     <div style="text-align:center;margin-top:12px"><a href="#" onclick="event.preventDefault();forgotPinUI()" style="color:var(--brand-2);font-size:14px">ลืมรหัสผ่าน?</a></div>
-    <div style="text-align:center;margin-top:10px;font-size:11px;color:#9AA88E">เวอร์ชัน 6.1 · Supabase เฟส 2A</div>
+    <div style="text-align:center;margin-top:10px;font-size:11px;color:#9AA88E">เวอร์ชัน 6.2 · Supabase เฟส 2B</div>
   </form>
 </div>
 
@@ -489,7 +489,7 @@ function tabList(){
   if(isPT()) return [['avail','ลงวันว่าง','calendar-plus']];
   if(isPPT()) return [['book','จองเวร','calendar-plus']];
   if(isPC()) return [['cal','ปฏิทินของฉัน','calendar'],['mine','คำขอของฉัน','file-text']];
-  if(!isMgr()) return [['cal','ปฏิทิน','calendar'],['mine','คำขอของฉัน','file-text'],['stat','สถิติลา','chart-pie'],['close','ปิดเดือน','circle-check'],['work','เวลางาน','clock-hour-4']];
+  if(!isMgr()) return [['cal','ปฏิทิน','calendar'],['mine','คำขอของฉัน','file-text'],['stat','สถิติลา','chart-pie'],['close','ปิดเดือน','circle-check'],['work','เวลางาน','clock-hour-4'],['tr','ขอเลื่อนเวลา','clock-edit']];
   const t=[['pending','รออนุมัติ','inbox'],['cal','ตาราง','calendar'],['ptb','จัด PT','pill'],['summary','สรุป','chart-bar'],['emps','พนักงาน','users']];
   if(D.me.role==='Admin') t.push(['audit','ประวัติ','history'],['settings','ตั้งค่า','settings'],['orgset','ตั้งค่าร้าน','building-store']);
   return t;
@@ -503,7 +503,7 @@ function go(v){ if((VIEW==='work'||VIEW==='pay') && v!=='work' && v!=='pay'){ WK
 function render(){
   $('selbar').hidden = true;
   return ({cal:viewCal, mine:viewMine, close:viewClose, pending:viewPending, summary:viewSummary, emps:viewEmps, audit:viewAudit,
-    settings:viewSettings, orgset:viewOrgSettings, avail:viewAvail, ptb:viewPtBoard, stat:viewStats, book:viewBook, work:viewWork, pay:viewPay}[VIEW] || viewCal)();
+    settings:viewSettings, orgset:viewOrgSettings, avail:viewAvail, ptb:viewPtBoard, stat:viewStats, book:viewBook, work:viewWork, pay:viewPay, tr:viewTimeReqs}[VIEW] || viewCal)();
 }
 
 /* ---------------- calendar ---------------- */
@@ -1319,9 +1319,20 @@ async function viewMine(){
       ${f.status==='รออนุมัติ'?`<div class="row" style="margin-top:8px"><span class="sp"></span><button class="btn btn-bad btn-sm" onclick="cancelReq('${f.reqId}')">${ico('x')} ยกเลิกคำขอ</button></div>`:''}
       ${f.status==='อนุมัติ'?`<div class="row" style="margin-top:8px;gap:6px"><span class="sp"></span>${LF_TYPES.includes(f.type)?`<button class="btn btn-sm" onclick="dlLeaveForm('${f.reqId}')">${ico('file-type-pdf')} ใบลา PDF</button>`:''}<button class="btn btn-bad btn-sm" onclick="openReqCancel('${f.reqId}')">${ico('arrow-back-up')} ขอยกเลิก</button></div>`:''}
       ${f.status==='ขอยกเลิก'?`<div class="muted" style="margin-top:6px">${ico('hourglass')} รอ HR ยืนยันการยกเลิก</div>`:''}
-    </div>`;}).join('') : empty('calendar-off','ยังไม่มีคำขอ'));
+    </div>`;}).join('') : empty('calendar-off','ยังไม่มีคำขอ'))
+    + trMineHtml();
 }
 let MINE={};
+function trMineHtml(){
+  const trs=(D.timeReqs||[]).filter(r=>r.empId===D.me.empId);
+  if(!trs.length) return '';
+  return `<div class="sec">${ico('clock-edit')} ขอเลื่อนเวลา</div>` + trs.sort((a,b)=>b.reqAt.localeCompare(a.reqAt)).map(r=>`<div class="card"><div class="row"><span class="st st-${r.status}">${esc(r.type)}</span><span class="sp"></span><span class="muted" style="font-size:12px">${esc(r.reqAt)}</span></div>
+    <div style="margin-top:6px">${ico('calendar')} <b>${th(r.date)}</b> ${r.time?' · เวลา '+esc(r.time):''}</div>
+    ${r.reason?`<div class="muted">เหตุผล: ${esc(r.reason)}</div>`:''}
+    ${r.actNote?`<div style="margin-top:4px">${ico('message-circle')} ${esc(r.actNote)}</div>`:''}
+    ${r.status==='รออนุมัติ'?`<div class="row" style="margin-top:8px"><span class="sp"></span><button class="btn btn-bad btn-sm" onclick="cancelTr('${r.id}')">${ico('x')} ยกเลิก</button></div>`:''}
+  </div>`).join('');
+}
 function openReqCancel(reqId){
   const rows=(MINE[reqId+'|อนุมัติ']||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
   if(!rows.length) return;
@@ -1391,7 +1402,8 @@ async function acceptMonth(){
 async function viewPending(){
   $('main').innerHTML='<div class="loading">กำลังโหลด...</div>';
   let list, sws; try{ [list, sws]=await Promise.all([api('getPending'), api('getSwapsHr')]); }catch(e){ return toast(e.message); }
-  D.pendingCount=list.length+sws.length; renderTabs();
+  const trPend=(D.timeReqs||[]).filter(r=>r.status==='รออนุมัติ');
+  D.pendingCount=list.length+sws.length+trPend.length; renderTabs();
   $('main').innerHTML=pinBanner()+`<h2 class="t">${ico('inbox')} รออนุมัติ (${list.length+sws.length})</h2>` + swapHrHtml(sws) + (list.length ? list.map(r=>`
     <div class="card">
       <div class="row"><div class="ava">${esc(r.abbr)}</div><b style="font-size:16px">${esc(r.nickname)}</b>
@@ -1408,7 +1420,8 @@ async function viewPending(){
         ${r.kind==='cancel'
           ? `<button class="btn btn-bad" onclick="decideC('${r.reqId}',false)">${ico('x')} ไม่ให้ยกเลิก</button><button class="btn btn-ok" onclick="decideC('${r.reqId}',true)">${ico('check')} อนุมัติการยกเลิก</button>`
           : `<button class="btn btn-bad" onclick="decide('${r.reqId}',false)">${ico('x')} ไม่อนุมัติ</button><button class="btn btn-ok" onclick="decide('${r.reqId}',true)">${ico('check')} อนุมัติ</button>`}</div>
-    </div>`).join('') : (sws.length?'':empty('mood-happy','ไม่มีคำขอรออนุมัติ')));
+    </div>`).join('') : (sws.length||trPend.length?'':empty('mood-happy','ไม่มีคำขอรออนุมัติ')))
+    + trPendHtml(trPend);
 }
 async function decideC(id, ok){
   const note = await promptDlg(ok?'อนุมัติการยกเลิก (คืนโควต้า)':'ไม่ให้ยกเลิก (วันลาคงเดิม)', 'หมายเหตุ (ไม่บังคับ)', ok?'อนุมัติการยกเลิก':'ไม่ให้ยกเลิก');
@@ -1419,6 +1432,97 @@ async function decide(id, ok){
   const note = await promptDlg(ok?'อนุมัติคำขอ':'ไม่อนุมัติคำขอ', ok?'หมายเหตุ (ไม่บังคับ)':'เหตุผลที่ไม่อนุมัติ', ok?'อนุมัติ':'ไม่อนุมัติ');
   if(note===null) return;
   try{ await api('decideRequest', id, ok, note); toast(ok?'อนุมัติแล้ว':'ไม่อนุมัติแล้ว'); viewPending(); reload(); }catch(e){ toast(e.message); }
+}
+
+
+/* ---------------- time requests (ขอเลื่อนเวลา) ---------------- */
+function trPendHtml(list){
+  if(!list.length) return '';
+  const emp=id=>D.emps.find(e=>e.id===id)||{nickname:'?',abbr:'?'};
+  return `<div class="sec">${ico('clock-edit')} ขอเลื่อนเวลา (${list.length})</div>` + list.map(r=>{
+    const e=emp(r.empId);
+    return `<div class="card">
+      <div class="row"><div class="ava">${esc(e.abbr)}</div><b style="font-size:16px">${esc(e.nickname)}</b>
+        <span class="st st-รออนุมัติ">${esc(r.type)}</span><span class="sp"></span>
+        <span class="muted" style="font-size:12px">${ico('clock')} ${esc(r.reqAt)}</span></div>
+      <div style="margin-top:10px">${ico('calendar')} <b>${th(r.date)}</b> ${r.time?'· เวลา '+esc(r.time):''}</div>
+      ${r.reason?`<div class="muted">เหตุผล: ${esc(r.reason)}</div>`:''}
+      <div class="row" style="margin-top:10px"><span class="sp"></span>
+        <button class="btn btn-bad" onclick="decideTr('${r.id}',false)">${ico('x')} ไม่อนุมัติ</button>
+        <button class="btn btn-ok" onclick="decideTr('${r.id}',true)">${ico('check')} อนุมัติ</button></div>
+    </div>`;
+  }).join('');
+}
+async function decideTr(id, ok){
+  const note = await promptDlg(ok?'อนุมัติขอเลื่อนเวลา':'ไม่อนุมัติขอเลื่อนเวลา', ok?'หมายเหตุ (ไม่บังคับ)':'เหตุผลที่ไม่อนุมัติ', ok?'อนุมัติ':'ไม่อนุมัติ');
+  if(note===null) return;
+  try{ await api('decideTimeReq', id, ok, note); toast(ok?'อนุมัติแล้ว':'ไม่อนุมัติแล้ว'); viewPending(); reload(); }catch(e){ toast(e.message); }
+}
+async function cancelTr(id){
+  if(!await confirmDlg('ยกเลิกคำขอเลื่อนเวลานี้?','ยกเลิก')) return;
+  try{ await api('cancelTimeReq', id); toast('ยกเลิกแล้ว'); if(VIEW==='tr') viewTimeReqs(); else if(VIEW==='pending') viewPending(); reload(); }catch(e){ toast(e.message); }
+}
+let TR_TYPE='เข้าสาย';
+async function viewTimeReqs(){
+  const mgr=isMgr(), lim=D.trLimits||{}, trs=D.timeReqs||[];
+  const mine=mgr?trs:trs.filter(r=>r.empId===D.me.empId);
+  const limLate=lim.late||0, limOut=lim.out||0, usedLate=lim.usedLate||0, usedOut=lim.usedOut||0;
+  let h=`<h2 class="t">${ico('clock-edit')} ขอเลื่อนเวลา</h2>`;
+  if(!mgr){
+    h+=`<div class="card" style="text-align:center">
+      <div class="row" style="justify-content:center;gap:20px;margin-bottom:12px">
+        <div>${ico('clock-hour-4','font-size:22px;color:var(--brand-2)')}<div style="font-size:13px">เข้าสาย</div><b>${usedLate}/${limLate}</b></div>
+        <div>${ico('door-exit','font-size:22px;color:var(--brand-2)')}<div style="font-size:13px">ออกก่อน</div><b>${usedOut}/${limOut}</b></div>
+      </div>
+      <button class="btn btn-p" onclick="openTrForm()" ${(TR_TYPE==='เข้าสาย'&&usedLate>=limLate)||(TR_TYPE==='ออกก่อน'&&usedOut>=limOut)?'':''}>${ico('plus')} ส่งคำขอเลื่อนเวลา</button>
+    </div>`;
+  }
+  h+=`<div class="sec">${ico('list-details')} ประวัติคำขอ</div>`;
+  if(mine.length){
+    const emp=id=>D.emps.find(e=>e.id===id)||{nickname:'?',abbr:'?'};
+    h+=mine.sort((a,b)=>b.reqAt.localeCompare(a.reqAt)).map(r=>{
+      const e=emp(r.empId);
+      return `<div class="card"><div class="row">${mgr?`<div class="ava">${esc(e.abbr)}</div><b>${esc(e.nickname)}</b>`:''}<span class="st st-${r.status}">${esc(r.type)}</span><span class="sp"></span><span class="muted" style="font-size:12px">${esc(r.reqAt)}</span></div>
+        <div style="margin-top:6px">${ico('calendar')} <b>${th(r.date)}</b> ${r.time?'· เวลา '+esc(r.time):''}</div>
+        ${r.reason?`<div class="muted">เหตุผล: ${esc(r.reason)}</div>`:''}
+        ${r.actNote?`<div style="margin-top:4px">${ico('message-circle')} ${esc(r.actNote)}</div>`:''}
+        ${r.status==='รออนุมัติ'?`<div class="row" style="margin-top:8px"><span class="sp"></span>${mgr?`<button class="btn btn-bad btn-sm" onclick="decideTr('${r.id}',false)">${ico('x')} ไม่อนุมัติ</button><button class="btn btn-ok btn-sm" onclick="decideTr('${r.id}',true)">${ico('check')} อนุมัติ</button>`:`<button class="btn btn-bad btn-sm" onclick="cancelTr('${r.id}')">${ico('x')} ยกเลิก</button>`}</div>`:''}
+      </div>`;
+    }).join('');
+  } else h+=empty('clock-edit','ยังไม่มีคำขอเลื่อนเวลา');
+  $('main').innerHTML=h;
+}
+function openTrForm(){
+  const lim=D.trLimits||{};
+  const canLate=(lim.usedLate||0)<(lim.late||0), canOut=(lim.usedOut||0)<(lim.out||0);
+  if(!canLate&&!canOut) return toast('ใช้สิทธิ์ขอเลื่อนเวลาครบแล้วทั้ง 2 ประเภท');
+  showModal(`<h3>${ico('clock-edit')} ส่งคำขอเลื่อนเวลา</h3>
+    <label class="l">ประเภท</label>
+    <select id="trType" onchange="trTypeChg()">
+      ${canLate?`<option value="เข้าสาย">เข้าสาย</option>`:''}
+      ${canOut?`<option value="ออกก่อน">ออกก่อน</option>`:''}
+    </select>
+    <div id="trQuota" class="muted" style="font-size:13px;margin-bottom:8px"></div>
+    <label class="l">วันที่ *</label><input type="date" id="trDate" value="${D.today}">
+    <label class="l">เวลาที่ขอ (ไม่บังคับ)</label><input type="time" id="trTime" placeholder="เช่น 09:30">
+    <label class="l">เหตุผล</label><textarea id="trReason" placeholder="เช่น รถติด / ต้องไปธุระด่วน"></textarea>
+    <div class="actions"><button class="btn btn-ghost" onclick="closeModal()">ปิด</button><button class="btn btn-p" id="trBtn">${ico('send')} ส่งคำขอ</button></div>`);
+  trTypeChg();
+  $('trBtn').onclick=async()=>{
+    const type=$('trType').value, date=$('trDate').value, time=$('trTime').value, reason=$('trReason').value.trim();
+    if(!date) return toast('กรุณาเลือกวันที่');
+    $('trBtn').disabled=true;
+    try{
+      await api('submitTimeReq',{type:type,work_date:date,requested_time:time||null,reason:reason||null});
+      closeModal(); toast('ส่งคำขอแล้ว รออนุมัติ'); reload(); if(VIEW==='tr') setTimeout(viewTimeReqs,500);
+    }catch(e){ toast(e.message); $('trBtn').disabled=false; }
+  };
+}
+function trTypeChg(){
+  const t=$('trType').value, lim=D.trLimits||{};
+  const used=t==='เข้าสาย'?(lim.usedLate||0):(lim.usedOut||0);
+  const max=t==='เข้าสาย'?(lim.late||0):(lim.out||0);
+  $('trQuota').textContent='ใช้ไปแล้ว '+used+'/'+max+' ครั้ง';
 }
 
 /* ---------------- manager: summary ---------------- */
@@ -1618,9 +1722,9 @@ async function viewSettings(){
       <td>${u.locked?`<div style="margin-bottom:4px"><span class="st st-ไม่อนุมัติ">ถูกล็อก</span> <button class="btn btn-sm btn-p" onclick="doUnlock('${esc(u.login)}')">${ico('lock-open')} ปลดล็อก</button></div>`:''}${u.linked?`<span class="st st-อนุมัติ">มีบัญชี</span><div style="margin-top:4px"><button class="btn btn-sm" onclick="doAccount('${u.empId}',false)">${ico('key')} รีเซ็ตรหัส</button></div>`
         :`<button class="btn btn-sm btn-p" ${u.email?'':'disabled'} onclick="doAccount('${u.empId}',true)">${ico('user-plus')} สร้างบัญชี</button>`}</td></tr>`).join('')}
     </table></div>
-    <h2 class="t" style="margin-top:26px">${ico('flask')} สถานะระบบใหม่ (เฟส 2A)</h2>
+    <h2 class="t" style="margin-top:26px">${ico('flask')} สถานะระบบใหม่ (เฟส 2B)</h2>
     <div class="card">ใช้งานได้: ปฏิทิน/ตารางเวร, ขอลา/อนุมัติ/ยกเลิก, ปรับเวร, ปิดเดือน, ทวนวันหยุด, สถิติลา, พนักงาน, ประวัติ, แจ้งเตือน, แลกเวร, PT ลงวันว่าง/จัด PT, pPT จองเวร, รายงานเวลาทำงาน (อัปโหลดสแกน/แก้เวลา), กฎรายบุคคล (เช่น K แยกสาขา), เข้าสู่ระบบด้วยตัวย่อ + ล็อกบัญชี
-      <div class="muted" style="font-size:13px;margin-top:6px">เฟสต่อไป: เงินเดือน/สลิป, Export รายงานเวลา, ใบลา PDF, แจ้งเตือนอัตโนมัติ, backup, ลงเวลา GPS</div>
+      <div class="muted" style="font-size:13px;margin-top:6px">เฟสต่อไป: Export รายงานเวลา, เงินเดือน/สลิป, ใบลา PDF, แจ้งเตือนอัตโนมัติ, backup, ลงเวลา GPS</div>
       <div class="flag" style="margin-top:8px">${ico('alert-triangle')} ช่วงทดสอบ: ข้อมูลที่กดในระบบนี้จะไม่ย้อนไปที่ Google Sheet และจะถูกล้างเมื่อรันย้ายข้อมูลรอบใหม่</div></div>`;
 }
 async function doAccount(id, isNew){
