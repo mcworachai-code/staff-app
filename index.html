@@ -249,7 +249,7 @@
     <button class="btn btn-p" style="width:100%;margin-top:18px;padding:13px" id="lgBtn" type="submit"><i class="ti ti-login-2"></i> เข้าสู่ระบบ</button>
     <div class="err" id="lgErr"></div>
     <div style="text-align:center;margin-top:12px"><a href="#" onclick="event.preventDefault();forgotPinUI()" style="color:var(--brand-2);font-size:14px">ลืมรหัสผ่าน?</a></div>
-    <div style="text-align:center;margin-top:10px;font-size:11px;color:#9AA88E">เวอร์ชัน 6.2 · Supabase เฟส 2B</div>
+    <div style="text-align:center;margin-top:10px;font-size:11px;color:#9AA88E">เวอร์ชัน 6.4 · Supabase เฟส 3A</div>
   </form>
 </div>
 
@@ -1045,13 +1045,13 @@ async function viewWork(){
 function renderWork(){
   const r=WK_DATA, mgr=r.mgr;
   const staff=r.people.filter(p=>p.kind==='Staff'), pts=r.people.filter(p=>p.kind==='PT'||p.kind==='pPT'), pcs=r.people.filter(p=>p.kind==='PC');
-  let h=`<div class="row"><h2 class="t sp">${ico('clock-hour-4')} ${mgr?'รายงานเวลาทำงาน':'เวลาทำงานของฉัน'}</h2>${mgr?`<button class="btn btn-sm btn-ghost" onclick="WK_RT=null;WK_DATA=null;viewWork()">${ico('lock')} ล็อก</button>`:D.phase>=3?`<button class="btn btn-sm btn-p" onclick="openMySlip(WK_YM)">${ico('cash')} สลิปเงินเดือน</button>`:''}</div>
+  let h=`<div class="row"><h2 class="t sp">${ico('clock-hour-4')} ${mgr?'รายงานเวลาทำงาน':'เวลาทำงานของฉัน'}</h2>${mgr?`<button class="btn btn-sm btn-p" onclick="go('pay')">${ico('cash')} เงินเดือน</button> <button class="btn btn-sm btn-ghost" onclick="WK_RT=null;WK_DATA=null;viewWork()">${ico('lock')} ล็อก</button>`:D.phase>=3?`<button class="btn btn-sm btn-p" onclick="openMySlip(WK_YM)">${ico('cash')} สลิปเงินเดือน</button>`:''}</div>
     <div class="mnav"><button class="btn" onclick="WK_YM=addMonth(WK_YM,-1);WK_OPEN=null;viewWork()">${ico('chevron-left')}</button><h3>${thMonth(r.ym)}</h3><button class="btn" onclick="WK_YM=addMonth(WK_YM,1);WK_OPEN=null;viewWork()">${ico('chevron-right')}</button></div>`;
   if(mgr){
     h+=`<div class="card"><div class="row" style="gap:8px;flex-wrap:wrap"><b class="sp">${ico('upload')} ไฟล์สแกนนิ้ว</b>
       <label class="btn btn-sm">${ico('file-upload')} YA<input type="file" accept=".csv,text/csv" hidden onchange="wkUpload('YA',this)"></label>
       <label class="btn btn-sm">${ico('file-upload')} HE<input type="file" accept=".csv,text/csv" hidden onchange="wkUpload('HE',this)"></label>
-      ${D.phase>=3?`<button class="btn btn-sm btn-p" onclick="wkExport()">${ico('table-export')} Export</button>`:''}</div>
+      <button class="btn btn-sm btn-p" onclick="wkExport()">${ico('table-export')} Export</button></div>
       <div class="muted" style="font-size:12px;margin-top:6px">${r.hasScan?'มีข้อมูลสแกนเดือนนี้แล้ว · อัปโหลดซ้ำจะทับของเดิม (เก็บที่ HR แก้ไว้)':'ยังไม่มีข้อมูลสแกนเดือนนี้'}</div>
       ${r.unmatched.length?`<div class="flag">${ico('alert-triangle')} ชื่อในเครื่องสแกนที่ไม่พบในระบบ: <b>${r.unmatched.map(esc).join(', ')}</b> · ตั้ง "ชื่อในเครื่องสแกน" ในหน้าพนักงาน</div>`:''}</div>`;
   }
@@ -1105,9 +1105,52 @@ async function wkUpload(br, input){
   try{ const r=await wkApi('uploadScan', WK_RT, br, txt); toast('นำเข้า '+br+' '+thMonth(r.ym)+' แล้ว ('+r.rows+' รายการ)'); WK_YM=r.ym; viewWork(); }
   catch(e){ toast(e.message); }
 }
-async function wkExport(){
-  try{ const r=await wkApi('exportWorkReport', WK_RT, WK_YM); alertDlg('Export แล้ว', `บันทึกไว้ในโฟลเดอร์ "Backup ระบบงาน"<br><a href="${esc(r.url)}" target="_blank" style="color:var(--brand-2)">${ico('external-link')} เปิดไฟล์ ${esc(r.name)}</a>`); }
-  catch(e){ toast(e.message); }
+let WK_EXP=null, XLSX_P=null;
+function wkExport(){
+  const cur=D.today.slice(0,7), opts=[cur,addMonth(cur,-1),addMonth(cur,-2),addMonth(cur,-3)];
+  showDlg(`<h3>${ico('table-export')} Export รายงานเวลาทำงาน</h3>
+    <label class="l">เลือกเดือน</label>
+    <select id="exYm">${opts.map(m=>`<option value="${m}" ${m===WK_YM?'selected':''}>${thMonth(m)}</option>`).join('')}</select>
+    <div class="muted" style="font-size:13px;margin:8px 0">ได้ 2 ชีต · <b>สรุป</b> (1 แถว/คน) + <b>รายวัน</b> (1 แถว/คน/วัน)<br>บันทึกลง Drive โฟลเดอร์ "Backup ระบบงาน" และดาวน์โหลดเป็น .xlsx ได้</div>
+    <div class="actions"><button class="btn btn-ghost" onclick="closeDlg()">ปิด</button><button class="btn btn-p" id="exBtn">${ico('table-export')} Export</button></div>`);
+  $('exBtn').onclick=async()=>{
+    const ym=$('exYm').value, b=$('exBtn');
+    b.disabled=true; b.innerHTML='กำลังสร้างไฟล์...';
+    try{
+      const r=await wkApi('exportWorkReport', WK_RT, ym);
+      WK_EXP=r;
+      showDlg(`<h3>${ico('circle-check')} Export เสร็จแล้ว</h3>
+        <div style="margin-bottom:10px"><b>${esc(r.name)}</b>
+          <div class="muted" style="font-size:13px">สรุป ${r.sheets[0].rows.length-1} คน · รายวัน ${r.sheets[1].rows.length-1} แถว</div></div>
+        ${r.url?`<div style="margin-bottom:10px"><a href="${esc(r.url)}" target="_blank" style="color:var(--brand-2)">${ico('external-link')} เปิดไฟล์ใน Google Drive</a></div>`
+               :`<div class="flag">${ico('alert-triangle')} บันทึกลง Drive ไม่สำเร็จ${r.err?': '+esc(r.err):''}<br>ดาวน์โหลดไฟล์ด้านล่างได้ปกติ</div>`}
+        <div class="actions"><button class="btn btn-ghost" onclick="closeDlg()">ปิด</button><button class="btn btn-p" id="exDl">${ico('download')} ดาวน์โหลด .xlsx</button></div>`);
+      $('exDl').onclick=wkExportDl;
+    }catch(e){ toast(e.message); closeDlg(); }
+  };
+}
+async function wkExportDl(){
+  if(!WK_EXP) return;
+  const b=$('exDl'), back=ico('download')+' ดาวน์โหลด .xlsx';
+  b.disabled=true; b.innerHTML='กำลังเตรียมไฟล์...';
+  try{
+    await loadXlsx_();
+    const wb=XLSX.utils.book_new();
+    WK_EXP.sheets.forEach(s=>XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.rows), s.name));
+    XLSX.writeFile(wb, WK_EXP.name+'.xlsx');
+  }catch(e){ toast('ดาวน์โหลดไม่สำเร็จ: '+e.message); }
+  b.disabled=false; b.innerHTML=back;
+}
+/* โหลด SheetJS ตอนกดดาวน์โหลดเท่านั้น (ไม่ถ่วงเวลาเปิดแอป) · ปักเวอร์ชันตายตัว */
+function loadXlsx_(){
+  if(window.XLSX) return Promise.resolve();
+  return XLSX_P = XLSX_P || new Promise((ok,bad)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload=()=>ok();
+    s.onerror=()=>{ XLSX_P=null; bad(new Error('โหลดตัวสร้างไฟล์ Excel ไม่ได้ (เน็ต/CDN)')); };
+    document.head.appendChild(s);
+  });
 }
 async function wkScheme(abbr, d, sc){
   const p=WK_DATA.people.find(x=>x.abbr===abbr), w=p&&p.rows.find(x=>x.d===d)||{};
@@ -1157,7 +1200,7 @@ async function viewPay(){
 }
 function renderPay(){
   const r=PAY_DATA, tot=r.people.reduce((s,p)=>s+p.net,0);
-  let h=`<div class="row"><h2 class="t sp">${ico('cash')} เงินเดือน</h2><button class="btn btn-sm btn-ghost" onclick="WK_RT=null;viewPay()">${ico('lock')} ล็อกหน้า</button></div>
+  let h=`<div class="row"><h2 class="t sp">${ico('cash')} เงินเดือน</h2><button class="btn btn-sm" onclick="go('work')">${ico('clock-hour-4')} เวลาทำงาน</button> <button class="btn btn-sm btn-ghost" onclick="WK_RT=null;viewPay()">${ico('lock')} ล็อกหน้า</button></div>
     <div class="mnav"><button class="btn" onclick="PAY_YM=addMonth(PAY_YM,-1);viewPay()">${ico('chevron-left')}</button><h3>${thMonth(r.ym)}</h3><button class="btn" onclick="PAY_YM=addMonth(PAY_YM,1);viewPay()">${ico('chevron-right')}</button></div>
     <div class="card"><div class="row" style="gap:6px;flex-wrap:wrap">
       <span class="sws ${r.locked?'ok':'wait'}">${r.locked?ico('lock')+' ล็อกแล้ว':ico('lock-open')+' ยังไม่ล็อก'}</span>
@@ -1198,7 +1241,7 @@ function payOpen(id){
       ${p.kind==='pPT'?fld('hourly','เรท/ชม. (pPT)',dft.hourly):''}
       ${fld('sso','ประกันสังคม',dft.sso)}
       ${staff&&(p.ontime||inp.ontime!=null)?fld('ontime','เบี้ยไม่สาย (แก้)',p.ontime?p.ontime.total:''):''}
-      ${staff&&!p.noComm?fld('bottles','HE sup (ขวด)','0')+fld('commOther','ค่าคอมอื่นๆ (บาท)','0'):''}
+      ${staff&&!p.noComm?fld('bottles','HE sup (ขวด)','0')+fld('commSupport','ค่าคอม Support (บาท)','0')+fld('commOther','ค่าคอมอื่นๆ (บาท)','0'):''}
     </div>
     <label class="l">รายได้อื่นๆ</label>${rowsEd('incomes',inp.incomes||[])}
     <label class="l">ค่าใช้จ่ายอื่นๆ</label>${rowsEd('expenses',inp.expenses||[])}
@@ -1206,7 +1249,7 @@ function payOpen(id){
   if($('peSave')) $('peSave').onclick=async()=>{
     const v=k=>$('pe_'+k)?$('pe_'+k).value:'';
     const list=k=>Array.from($('pe_'+k).querySelectorAll('.pel')).map(el=>({label:el.querySelector('.pl').value.trim(), amount:el.querySelector('.pa').value})).filter(x=>x.label);
-    const data={base:v('base'),goodman:v('goodman'),otRate:v('otRate'),sso:v('sso'),bottles:v('bottles'),commOther:v('commOther'),hourly:v('hourly'),ontime:v('ontime'),incomes:list('incomes'),expenses:list('expenses')};
+    const data={base:v('base'),goodman:v('goodman'),otRate:v('otRate'),sso:v('sso'),bottles:v('bottles'),commSupport:v('commSupport'),commOther:v('commOther'),hourly:v('hourly'),ontime:v('ontime'),incomes:list('incomes'),expenses:list('expenses')};
     try{ const np=await wkApi('savePayEntry', WK_RT, r.ym, id, data); const i=PAY_DATA.people.findIndex(x=>x.id===id); if(np&&i>=0) PAY_DATA.people[i]=np; toast('บันทึกแล้ว'); renderPay(); payOpen(id); }catch(e){ toast(e.message); }
   };
 }
@@ -1513,7 +1556,7 @@ function openTrForm(){
     if(!date) return toast('กรุณาเลือกวันที่');
     $('trBtn').disabled=true;
     try{
-      await api('submitTimeReq',{type:type,work_date:date,requested_time:time||null,reason:reason||null});
+      await api('submitTimeReq',{empId:D.me.empId,date:date,type:type,time:time,reason:reason});
       closeModal(); toast('ส่งคำขอแล้ว รออนุมัติ'); reload(); if(VIEW==='tr') setTimeout(viewTimeReqs,500);
     }catch(e){ toast(e.message); $('trBtn').disabled=false; }
   };
@@ -1722,9 +1765,9 @@ async function viewSettings(){
       <td>${u.locked?`<div style="margin-bottom:4px"><span class="st st-ไม่อนุมัติ">ถูกล็อก</span> <button class="btn btn-sm btn-p" onclick="doUnlock('${esc(u.login)}')">${ico('lock-open')} ปลดล็อก</button></div>`:''}${u.linked?`<span class="st st-อนุมัติ">มีบัญชี</span><div style="margin-top:4px"><button class="btn btn-sm" onclick="doAccount('${u.empId}',false)">${ico('key')} รีเซ็ตรหัส</button></div>`
         :`<button class="btn btn-sm btn-p" ${u.email?'':'disabled'} onclick="doAccount('${u.empId}',true)">${ico('user-plus')} สร้างบัญชี</button>`}</td></tr>`).join('')}
     </table></div>
-    <h2 class="t" style="margin-top:26px">${ico('flask')} สถานะระบบใหม่ (เฟส 2B)</h2>
+    <h2 class="t" style="margin-top:26px">${ico('flask')} สถานะระบบใหม่ (เฟส 3A)</h2>
     <div class="card">ใช้งานได้: ปฏิทิน/ตารางเวร, ขอลา/อนุมัติ/ยกเลิก, ปรับเวร, ปิดเดือน, ทวนวันหยุด, สถิติลา, พนักงาน, ประวัติ, แจ้งเตือน, แลกเวร, PT ลงวันว่าง/จัด PT, pPT จองเวร, รายงานเวลาทำงาน (อัปโหลดสแกน/แก้เวลา), กฎรายบุคคล (เช่น K แยกสาขา), เข้าสู่ระบบด้วยตัวย่อ + ล็อกบัญชี
-      <div class="muted" style="font-size:13px;margin-top:6px">เฟสต่อไป: Export รายงานเวลา, เงินเดือน/สลิป, ใบลา PDF, แจ้งเตือนอัตโนมัติ, backup, ลงเวลา GPS</div>
+      <div class="muted" style="font-size:13px;margin-top:6px">เฟสต่อไป: 3B สลิปพนักงาน + Export เงินเดือน, ใบลา PDF, แจ้งเตือนอัตโนมัติ, backup, ลงเวลา GPS</div>
       <div class="flag" style="margin-top:8px">${ico('alert-triangle')} ช่วงทดสอบ: ข้อมูลที่กดในระบบนี้จะไม่ย้อนไปที่ Google Sheet และจะถูกล้างเมื่อรันย้ายข้อมูลรอบใหม่</div></div>`;
 }
 async function doAccount(id, isNew){
