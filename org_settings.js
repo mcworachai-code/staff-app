@@ -198,6 +198,21 @@ async function openEmpRules(empId) {
       const v = ER.values[d.key], id = 'er_' + d.key;
       const p = ph[d.key] != null && ph[d.key] !== '' ? `placeholder="ค่าเริ่มต้น ${esc(ph[d.key])}"` : '';
       const dis = canEdit ? '' : 'disabled';
+      if (d.type === 'split') {
+        const sv = v && typeof v === 'object' ? v : null, br = ER.branches || [];
+        const bsel = (sid, cur) => `<select id="${sid}" ${dis}>${br.map(b => `<option value="${esc(b.code)}" ${cur === b.code ? 'selected' : ''}>${esc(b.code)}</option>`).join('')}</select>`;
+        const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+        return `<div style="margin-top:14px;padding:10px;border:1px solid var(--line,#ddd);border-radius:10px">
+          <label class="l" style="margin-top:0"><input type="checkbox" id="er_split_on" ${sv ? 'checked' : ''} ${dis} onchange="document.getElementById('er_split_box').hidden=!this.checked"> ${esc(d.label)}</label>
+          <div id="er_split_box" ${sv ? '' : 'hidden'}>
+            <div class="muted" style="font-size:12px;margin:4px 0">ทุกสัปดาห์ในวันที่เลือก: ตารางแสดงที่สาขาเช้า (นับกำลังคนทั้งสองสาขา) · คำนวณเป็น 1 วัน (เข้า=สแกนสาขาเช้า ออก=สแกนสาขาบ่าย) · แลกเวรในวันนั้นไม่ได้</div>
+            <label class="l">วันในสัปดาห์</label><select id="er_split_wd" ${dis}>${days.map((n, i) => `<option value="${i}" ${sv && Number(sv.weekday) === i ? 'selected' : ''}>${n}</option>`).join('')}</select>
+            <label class="l">สาขาเช้า (สแกนเข้า)</label>${bsel('er_split_ib', sv ? sv.in_branch : 'HE')}
+            <label class="l">ต้องสแกนเข้าไม่เกิน</label>${_in('er_split_by', sv ? sv.in_by : '09:00', 'time', dis)}
+            <label class="l">สาขาบ่าย (สแกนออก)</label>${bsel('er_split_ob', sv ? sv.out_branch : 'YA')}
+            <label class="l">ปกติออกหลังเวลา (ออกก่อนได้ ไม่ปรับ)</label>${_in('er_split_after', sv ? sv.out_after : '20:00', 'time', dis)}
+          </div></div>`;
+      }
       if (d.type === 'bool') return `<label class="l">${esc(d.label)}</label><select id="${id}" ${dis}><option value="">ไม่ (ค่าเริ่มต้น)</option><option value="true" ${v === true ? 'selected' : ''}>ใช่</option></select>`;
       return `<label class="l">${esc(d.label)}</label>` + _in(id, v, d.type === 'number' ? 'number' : d.type === 'time' ? 'time' : d.type === 'month' ? 'month' : 'text', `${p} ${dis} ${d.type === 'number' ? 'step="any" min="0"' : ''}`);
     }).join('')}
@@ -206,7 +221,15 @@ async function openEmpRules(empId) {
 }
 async function saveEmpRulesUi(empId) {
   const values = {};
-  ER.defs.forEach(d => { values[d.key] = _v('er_' + d.key); });
+  ER.defs.forEach(d => {
+    if (d.type === 'split') {
+      values[d.key] = $('er_split_on').checked
+        ? { weekday: Number($('er_split_wd').value), in_branch: $('er_split_ib').value, in_by: $('er_split_by').value, out_branch: $('er_split_ob').value, out_after: $('er_split_after').value }
+        : null;
+      return;
+    }
+    values[d.key] = _v('er_' + d.key);
+  });
   try { await api('saveEmpRules', empId, values); toast('บันทึกแล้ว'); closeModal(); }
   catch (e) { toast(e.message); }
 }

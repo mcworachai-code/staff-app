@@ -241,15 +241,15 @@
   <form class="box" id="lgForm" onsubmit="event.preventDefault();lgSubmit()" novalidate>
     <div class="logo" id="logo"><i class="ti ti-key"></i></div>
     <h1>ระบบพนักงาน</h1>
-    <p>เข้าสู่ระบบด้วยอีเมล และรหัสผ่าน</p>
-    <label class="l"><i class="ti ti-mail"></i> อีเมล</label>
-    <input id="lgCode" class="em" type="email" autocomplete="username" autocapitalize="off" enterkeyhint="next" placeholder="name@gmail.com">
+    <p>เข้าสู่ระบบด้วยอีเมลหรือตัวย่อ และรหัสผ่าน</p>
+    <label class="l"><i class="ti ti-user"></i> อีเมล หรือ ตัวย่อ</label>
+    <input id="lgCode" class="em" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" placeholder="ตัวย่อ หรือ name@gmail.com">
     <label class="l"><i class="ti ti-lock"></i> รหัสผ่าน</label>
     <input id="lgPin" class="em" enterkeyhint="go" type="password" autocomplete="current-password" placeholder="••••••••">
     <button class="btn btn-p" style="width:100%;margin-top:18px;padding:13px" id="lgBtn" type="submit"><i class="ti ti-login-2"></i> เข้าสู่ระบบ</button>
     <div class="err" id="lgErr"></div>
     <div style="text-align:center;margin-top:12px"><a href="#" onclick="event.preventDefault();forgotPinUI()" style="color:var(--brand-2);font-size:14px">ลืมรหัสผ่าน?</a></div>
-    <div style="text-align:center;margin-top:10px;font-size:11px;color:#9AA88E">เวอร์ชัน 6.0 · Supabase เฟส 1</div>
+    <div style="text-align:center;margin-top:10px;font-size:11px;color:#9AA88E">เวอร์ชัน 6.1 · Supabase เฟส 2A</div>
   </form>
 </div>
 
@@ -382,7 +382,7 @@ const BLACK_ABBR=['B','O'];
 const isLate = t => !!t && t > '10:50';
 function shiftChip(x){
   const cls=['chip','br-'+x.b, x.id===D.me.empId?'mine':'', x.src==='ปรับ'?'adj':'', BLACK_ABBR.includes(String(x.a).toUpperCase())?'blk':''].join(' ');
-  return `<span class="${cls}" title="${esc(x.n+' '+x.b+' '+(x.t||'')+(x.note?' · '+x.note:''))}">${x.src==='แลก'?'<i class="swp">⇄</i>':''}${isLate(x.t)?'<i class="late">▲</i>':''}${esc(x.a)}</span>`;
+  return `<span class="${cls}" title="${esc(x.n+' '+x.b+' '+(x.t||'')+(x.note?' · '+x.note:''))}">${x.src==='แลก'?'<i class="swp">⇄</i>':''}${isLate(x.t)?'<i class="late">▲</i>':''}${esc(x.a)}${x.sp?`<i class="late" style="margin-left:1px">›${esc(x.sp)}</i>`:''}</span>`;
 }
 function setBr(b,v){ BRF[b]=v; if(!BRF.YA&&!BRF.HE) BRF[b==='YA'?'HE':'YA']=true; store.set('brf',JSON.stringify(BRF)); viewCal(); }
 function setMine(v){ MINEV=v; store.set('minev',v?'1':'0'); viewCal(); }
@@ -427,14 +427,21 @@ function openChangePin(forced){
 
 /* ---------------- auth ---------------- */
 async function doLogin(){
-  const email=$('lgCode').value.trim(), pw=$('lgPin').value;
-  if(!email||!pw){ $('lgErr').textContent='กรอกอีเมลและรหัสผ่าน'; return; }
+  const id=$('lgCode').value.trim(), pw=$('lgPin').value;
+  if(!id||!pw){ $('lgErr').textContent='กรอกอีเมลหรือตัวย่อ และรหัสผ่าน'; return; }
   $('lgBtn').disabled=true; $('lgErr').textContent='';
   try{
-    const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
-    if(error) throw new Error(/invalid/i.test(error.message)?'อีเมลหรือรหัสผ่านไม่ถูกต้อง':error.message);
+    let r;
+    try{
+      const res = await fetch(API_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_KEY }, body: JSON.stringify({ fn:'login', args:[id, pw] }) });
+      r = await res.json();
+    }catch(e){ throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง'); }
+    if(!r || r.error || !r.data || !r.data.session) throw new Error(String((r && (r.error || r.message || r.msg)) || 'เข้าสู่ระบบไม่สำเร็จ'));
+    const s = r.data.session;
+    const { error } = await sb.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
+    if(error) throw new Error(error.message);
     TOKEN='sb'; $('lgPin').value='';
-    if(data.user && data.user.user_metadata && data.user.user_metadata.must_change) openChangePin(true); else await start();
+    if(r.data.must_change) openChangePin(true); else await start();
   }
   catch(e){ $('lgErr').textContent=e.message; }
   finally{ $('lgBtn').disabled=false; }
@@ -482,8 +489,8 @@ function tabList(){
   if(isPT()) return [['avail','ลงวันว่าง','calendar-plus']];
   if(isPPT()) return [['book','จองเวร','calendar-plus']];
   if(isPC()) return [['cal','ปฏิทินของฉัน','calendar'],['mine','คำขอของฉัน','file-text']];
-  if(!isMgr()) return [['cal','ปฏิทิน','calendar'],['mine','คำขอของฉัน','file-text'],['stat','สถิติลา','chart-pie'],['close','ปิดเดือน','circle-check']];
-  const t=[['pending','รออนุมัติ','inbox'],['cal','ตาราง','calendar'],['summary','สรุป','chart-bar'],['emps','พนักงาน','users']];
+  if(!isMgr()) return [['cal','ปฏิทิน','calendar'],['mine','คำขอของฉัน','file-text'],['stat','สถิติลา','chart-pie'],['close','ปิดเดือน','circle-check'],['work','เวลางาน','clock-hour-4']];
+  const t=[['pending','รออนุมัติ','inbox'],['cal','ตาราง','calendar'],['ptb','จัด PT','pill'],['summary','สรุป','chart-bar'],['emps','พนักงาน','users']];
   if(D.me.role==='Admin') t.push(['audit','ประวัติ','history'],['settings','ตั้งค่า','settings'],['orgset','ตั้งค่าร้าน','building-store']);
   return t;
 }
@@ -521,13 +528,14 @@ function dayDetailHtml(d, editable){
   const off=(D.emps||[]).filter(e=>(e.offDays||[]).includes(w) && !working.has(e.id));
   let h='';
   ['YA','HE'].forEach(b=>{
-    const es=ro.e.filter(x=>x.b===b), sl=ro.s.filter(s=>s.b===b);
-    if(!editable && !isMgr() && (isPC()||isPT()||isPPT()) && !es.length) return;
-    h+=`<div class="brbox"><div class="brh"><span class="br br-${b}">${b}</span><span class="muted" style="font-size:13px">${es.filter(x=>x.k!=='Test').length} คน</span></div>`;
+    const es=ro.e.filter(x=>x.b===b), sl=ro.s.filter(s=>s.b===b), pmEs=ro.e.filter(x=>x.sp===b);
+    if(!editable && !isMgr() && (isPC()||isPT()||isPPT()) && !es.length && !pmEs.length) return;
+    h+=`<div class="brbox"><div class="brh"><span class="br br-${b}">${b}</span><span class="muted" style="font-size:13px">${es.filter(x=>x.k!=='Test').length+pmEs.length} คน</span></div>`;
     h+= es.length ? es.map(x=>`<div class="srow"><span class="tm">${x.t||'—'}</span><span class="abbr ab-${b}">${esc(x.a)}</span>
       <span class="sp">${esc(x.n)}${x.k==='PC'||x.k==='PT'||x.k==='pPT'?` <span class="tag">${x.k}</span>`:''}${x.note?`<div class="muted" style="font-size:12px">${esc(x.note)}</div>`:''}</span>
       ${x.src==='ปรับ'?'<span class="tag">ปรับ</span>':''}${x.src==='แลก'?'<span class="tag">⇄ แลก</span>':''}${editable?`<button class="btn btn-sm" onclick="openShift('${d}','${esc(x.a)}')" aria-label="ปรับ">${ico('edit')}</button>`:''}</div>`).join('')
-      : '<div class="muted" style="padding:4px 0;font-size:13px">ไม่มี</div>';
+      : (pmEs.length ? '' : '<div class="muted" style="padding:4px 0;font-size:13px">ไม่มี</div>');
+    h+= pmEs.map(x=>`<div class="srow"><span class="tm">บ่าย</span><span class="abbr ab-${b}">${esc(x.a)}</span><span class="sp">${esc(x.n)}<div class="muted" style="font-size:12px">เช้าอยู่ ${esc(x.b)} → บ่ายมาสาขานี้</div></span></div>`).join('');
     h+= sl.map(s=>`<div class="srow"><span class="tm">${s.t}</span><span class="chip slot br-${b}">PT?</span><span class="sp muted" style="font-size:13px">ยังไม่จัด PT</span>
       </div>`).join('');
     h+='</div>';
@@ -1014,7 +1022,7 @@ function wkTouch(){ WK_LAST=Date.now(); }
 setInterval(()=>{ if(WK_RT && Date.now()-WK_LAST>15*60*1000){ WK_RT=null; WK_DATA=null; PAY_DATA=null; closeModal(); if(VIEW==='work') viewWork(); if(VIEW==='pay') viewPay(); } }, 30000);
 async function wkApi(fn, ...a){
   try{ const r=await api(fn, ...a); wkTouch(); return r; }
-  catch(e){ if(/REPORT_LOCKED/.test(e.message)){ WK_RT=null; WK_DATA=null; closeModal(); (VIEW==='pay'?viewPay:viewWork)(); throw new Error('หมดเวลา กรุณาใส่ PIN อีกครั้ง'); } throw e; }
+  catch(e){ if(/REPORT_LOCKED/.test(e.message)){ WK_RT=null; WK_DATA=null; closeModal(); (VIEW==='pay'?viewPay:viewWork)(); throw new Error('หมดเวลา กรุณาใส่รหัสผ่านอีกครั้ง'); } throw e; }
 }
 async function viewWork(){
   WK_YM = WK_YM || addMonth(D.today.slice(0,7),-1);
@@ -1022,11 +1030,11 @@ async function viewWork(){
   if(mgr && !WK_RT){
     $('main').innerHTML=`<h2 class="t">${ico('clock-hour-4')} รายงานเวลาทำงาน</h2>
       <div class="card" style="max-width:380px;margin:20px auto;text-align:center">${ico('lock','font-size:34px;color:var(--brand-2)')}
-      <p style="margin:8px 0 12px">รายงานนี้มีข้อมูลส่วนตัวของพนักงาน<br>กรุณาใส่ PIN ของคุณอีกครั้ง</p>
-      <input id="wkPin" type="password" inputmode="numeric" maxlength="6" style="font-size:20px;letter-spacing:6px;text-align:center" placeholder="••••••">
+      <p style="margin:8px 0 12px">รายงานนี้มีข้อมูลส่วนตัวของพนักงาน<br>กรุณาใส่รหัสผ่านของคุณอีกครั้ง</p>
+      <input id="wkPin" type="password" autocomplete="current-password" style="font-size:16px;text-align:center" placeholder="รหัสผ่านของคุณ">
       <button class="btn btn-p" style="width:100%;margin-top:10px" id="wkUnlock">${ico('lock-open')} เปิดรายงาน</button>
       <div class="muted" style="font-size:12px;margin-top:8px">ล็อกอัตโนมัติเมื่อไม่ได้ใช้งาน 15 นาที</div></div>`;
-    const go_=async()=>{ try{ WK_RT=await api('unlockReport', $('wkPin').value.trim()); wkTouch(); viewWork(); }catch(e){ toast(e.message); $('wkPin').value=''; } };
+    const go_=async()=>{ try{ WK_RT=await api('unlockReport', $('wkPin').value); wkTouch(); viewWork(); }catch(e){ toast(e.message); $('wkPin').value=''; } };
     $('wkUnlock').onclick=go_; $('wkPin').addEventListener('keydown',e=>{ if(e.key==='Enter') go_(); }); $('wkPin').focus();
     return;
   }
@@ -1037,13 +1045,13 @@ async function viewWork(){
 function renderWork(){
   const r=WK_DATA, mgr=r.mgr;
   const staff=r.people.filter(p=>p.kind==='Staff'), pts=r.people.filter(p=>p.kind==='PT'||p.kind==='pPT'), pcs=r.people.filter(p=>p.kind==='PC');
-  let h=`<div class="row"><h2 class="t sp">${ico('clock-hour-4')} ${mgr?'รายงานเวลาทำงาน':'เวลาทำงานของฉัน'}</h2>${mgr?`<button class="btn btn-sm btn-ghost" onclick="WK_RT=null;WK_DATA=null;viewWork()">${ico('lock')} ล็อก</button>`:`<button class="btn btn-sm btn-p" onclick="openMySlip(WK_YM)">${ico('cash')} สลิปเงินเดือน</button>`}</div>
+  let h=`<div class="row"><h2 class="t sp">${ico('clock-hour-4')} ${mgr?'รายงานเวลาทำงาน':'เวลาทำงานของฉัน'}</h2>${mgr?`<button class="btn btn-sm btn-ghost" onclick="WK_RT=null;WK_DATA=null;viewWork()">${ico('lock')} ล็อก</button>`:D.phase>=3?`<button class="btn btn-sm btn-p" onclick="openMySlip(WK_YM)">${ico('cash')} สลิปเงินเดือน</button>`:''}</div>
     <div class="mnav"><button class="btn" onclick="WK_YM=addMonth(WK_YM,-1);WK_OPEN=null;viewWork()">${ico('chevron-left')}</button><h3>${thMonth(r.ym)}</h3><button class="btn" onclick="WK_YM=addMonth(WK_YM,1);WK_OPEN=null;viewWork()">${ico('chevron-right')}</button></div>`;
   if(mgr){
     h+=`<div class="card"><div class="row" style="gap:8px;flex-wrap:wrap"><b class="sp">${ico('upload')} ไฟล์สแกนนิ้ว</b>
       <label class="btn btn-sm">${ico('file-upload')} YA<input type="file" accept=".csv,text/csv" hidden onchange="wkUpload('YA',this)"></label>
       <label class="btn btn-sm">${ico('file-upload')} HE<input type="file" accept=".csv,text/csv" hidden onchange="wkUpload('HE',this)"></label>
-      <button class="btn btn-sm btn-p" onclick="wkExport()">${ico('table-export')} Export</button></div>
+      ${D.phase>=3?`<button class="btn btn-sm btn-p" onclick="wkExport()">${ico('table-export')} Export</button>`:''}</div>
       <div class="muted" style="font-size:12px;margin-top:6px">${r.hasScan?'มีข้อมูลสแกนเดือนนี้แล้ว · อัปโหลดซ้ำจะทับของเดิม (เก็บที่ HR แก้ไว้)':'ยังไม่มีข้อมูลสแกนเดือนนี้'}</div>
       ${r.unmatched.length?`<div class="flag">${ico('alert-triangle')} ชื่อในเครื่องสแกนที่ไม่พบในระบบ: <b>${r.unmatched.map(esc).join(', ')}</b> · ตั้ง "ชื่อในเครื่องสแกน" ในหน้าพนักงาน</div>`:''}</div>`;
   }
@@ -1135,11 +1143,11 @@ async function viewPay(){
   if(!WK_RT){
     $('main').innerHTML=`<h2 class="t">${ico('cash')} เงินเดือน</h2>
       <div class="card" style="max-width:380px;margin:20px auto;text-align:center">${ico('lock','font-size:34px;color:var(--brand-2)')}
-      <p style="margin:8px 0 12px">ข้อมูลเงินเดือนเป็นความลับ<br>กรุณาใส่ PIN ของคุณอีกครั้ง</p>
-      <input id="wkPin" type="password" inputmode="numeric" maxlength="6" style="font-size:20px;letter-spacing:6px;text-align:center" placeholder="••••••">
+      <p style="margin:8px 0 12px">ข้อมูลเงินเดือนเป็นความลับ<br>กรุณาใส่รหัสผ่านของคุณอีกครั้ง</p>
+      <input id="wkPin" type="password" autocomplete="current-password" style="font-size:16px;text-align:center" placeholder="รหัสผ่านของคุณ">
       <button class="btn btn-p" style="width:100%;margin-top:10px" id="wkUnlock">${ico('lock-open')} เปิด</button>
       <div class="muted" style="font-size:12px;margin-top:8px">ล็อกอัตโนมัติเมื่อไม่ได้ใช้งาน 15 นาที</div></div>`;
-    const go_=async()=>{ try{ WK_RT=await api('unlockReport', $('wkPin').value.trim()); wkTouch(); viewPay(); }catch(e){ toast(e.message); $('wkPin').value=''; } };
+    const go_=async()=>{ try{ WK_RT=await api('unlockReport', $('wkPin').value); wkTouch(); viewPay(); }catch(e){ toast(e.message); $('wkPin').value=''; } };
     $('wkUnlock').onclick=go_; $('wkPin').addEventListener('keydown',e=>{ if(e.key==='Enter') go_(); }); $('wkPin').focus();
     return;
   }
@@ -1457,7 +1465,7 @@ async function viewSummary(){
   const list=res.staff, keys=['sick','personal','holiday','vacation','swap'];
   const done=list.filter(s=>s.accepted).length;
   const rvIc = r => !r ? `<span class="muted">—</span>` : r.result==='ถูกต้อง' ? ico('circle-check','font-size:18px;color:var(--brand-2)') : ico('message-report','font-size:18px;color:var(--bad)');
-  let h=`<div class="row"><h2 class="t sp">${ico('chart-bar')} สรุปวันลา</h2><button class="btn btn-sm" onclick="go('stat')">${ico('chart-pie')} สถิติรายปี</button></div><div class="mnav"><button class="btn" onclick="SUM_YM=addMonth(SUM_YM,-1);viewSummary()">${ico('chevron-left')}</button>
+  let h=`<div class="row"><h2 class="t sp">${ico('chart-bar')} สรุปวันลา</h2><button class="btn btn-sm" onclick="go('work')">${ico('clock-hour-4')} เวลาทำงาน</button> <button class="btn btn-sm" onclick="go('stat')">${ico('chart-pie')} สถิติรายปี</button></div><div class="mnav"><button class="btn" onclick="SUM_YM=addMonth(SUM_YM,-1);viewSummary()">${ico('chevron-left')}</button>
     <h3>${thMonth(SUM_YM)}</h3><button class="btn" onclick="SUM_YM=addMonth(SUM_YM,1);viewSummary()">${ico('chevron-right')}</button></div>
     <p class="muted">ยืนยันแล้ว ${done}/${list.length} คน · ตัวเลข = เดือนนี้ (คงเหลือ / สิทธิ์) · แตะชื่อเพื่อดู/แก้ไข</p>
     <div class="scroll"><table class="tb"><tr><th>พนักงาน</th>${['ลาป่วย','ลากิจ','นักขัตฯ','พักร้อน','สลับวันหยุด'].map(t=>`<th title="${t}">${ico(TYPE_IC[t])}<div style="font-size:11px;font-weight:400">${t.replace('ลา','').replace('วันหยุด','')}</div></th>`).join('')}<th>ปิดเดือน</th><th title="ทวนวันหยุดเดือนนี้ (ล่วงหน้า)">ทวน</th></tr>
@@ -1607,12 +1615,12 @@ async function viewSettings(){
         <td>${sel('ms_'+u.empId,['ทำงานอยู่','ลาออก','ปิดใช้งาน'],u.status)}</td>
         <td>${u.kind==='PC'?sel('mp_'+u.empId,['วันหยุด','วันทำงาน'],u.pcMode):`<input type="hidden" id="mp_${u.empId}" value="${esc(u.pcMode)}"><span class="muted">-</span>`}</td>
         <td><button class="btn btn-sm btn-p" onclick="saveMember('${u.empId}')" aria-label="บันทึก">${ico('device-floppy')}</button></td>`}
-      <td>${u.linked?`<span class="st st-อนุมัติ">มีบัญชี</span><div style="margin-top:4px"><button class="btn btn-sm" onclick="doAccount('${u.empId}',false)">${ico('key')} รีเซ็ตรหัส</button></div>`
+      <td>${u.locked?`<div style="margin-bottom:4px"><span class="st st-ไม่อนุมัติ">ถูกล็อก</span> <button class="btn btn-sm btn-p" onclick="doUnlock('${esc(u.login)}')">${ico('lock-open')} ปลดล็อก</button></div>`:''}${u.linked?`<span class="st st-อนุมัติ">มีบัญชี</span><div style="margin-top:4px"><button class="btn btn-sm" onclick="doAccount('${u.empId}',false)">${ico('key')} รีเซ็ตรหัส</button></div>`
         :`<button class="btn btn-sm btn-p" ${u.email?'':'disabled'} onclick="doAccount('${u.empId}',true)">${ico('user-plus')} สร้างบัญชี</button>`}</td></tr>`).join('')}
     </table></div>
-    <h2 class="t" style="margin-top:26px">${ico('flask')} สถานะระบบใหม่ (เฟส 1)</h2>
-    <div class="card">ใช้งานได้: ปฏิทิน/ตารางเวร, ขอลา/อนุมัติ/ยกเลิก, ปรับเวร, ปิดเดือน, ทวนวันหยุด, สถิติลา, พนักงาน, ประวัติ, แจ้งเตือน, อีเมล (โหมดทดสอบ)
-      <div class="muted" style="font-size:13px;margin-top:6px">เฟส 2: PT ลงวันว่าง, จัด PT, pPT จองเวร, แลกเวร · เฟส 3: เวลางาน/สแกนนิ้ว, เงินเดือน, สลิป, ใบลา PDF, แจ้งเตือนอัตโนมัติ, backup</div>
+    <h2 class="t" style="margin-top:26px">${ico('flask')} สถานะระบบใหม่ (เฟส 2A)</h2>
+    <div class="card">ใช้งานได้: ปฏิทิน/ตารางเวร, ขอลา/อนุมัติ/ยกเลิก, ปรับเวร, ปิดเดือน, ทวนวันหยุด, สถิติลา, พนักงาน, ประวัติ, แจ้งเตือน, แลกเวร, PT ลงวันว่าง/จัด PT, pPT จองเวร, รายงานเวลาทำงาน (อัปโหลดสแกน/แก้เวลา), กฎรายบุคคล (เช่น K แยกสาขา), เข้าสู่ระบบด้วยตัวย่อ + ล็อกบัญชี
+      <div class="muted" style="font-size:13px;margin-top:6px">เฟสต่อไป: เงินเดือน/สลิป, Export รายงานเวลา, ใบลา PDF, แจ้งเตือนอัตโนมัติ, backup, ลงเวลา GPS</div>
       <div class="flag" style="margin-top:8px">${ico('alert-triangle')} ช่วงทดสอบ: ข้อมูลที่กดในระบบนี้จะไม่ย้อนไปที่ Google Sheet และจะถูกล้างเมื่อรันย้ายข้อมูลรอบใหม่</div></div>`;
 }
 async function doAccount(id, isNew){
